@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Cricket Smash - 1-Minute Mobile Cricket</title>
+  
+  <!-- SEO & Mobile App Metadata -->
+  <meta name="description" content="Cricket Smash - Fast 1-minute one-handed mobile cricket game. Hit 4s and 6s, unlock epic bats and stadiums, and beat global high scores!">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:ital,wght@0,600;0,800;0,900;1,800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  <div id="app-container">
+    <div id="mobile-frame">
+
+      <!-- Canvas for 60FPS Game Rendering -->
+      <canvas id="game-canvas"></canvas>
+
+      <!-- HUD Overlay (Active during gameplay) -->
+      <div id="hud-screen" class="overlay-screen hidden">
+        <!-- Top Stats Bar -->
+        <div class="hud-top-bar">
+          <div class="stat-pill score-pill">
+            <span class="pill-label">RUNS</span>
+            <span id="hud-score" class="pill-value">0</span>
+          </div>
+
+          <div class="stat-pill timer-pill" id="timer-container">
+            <span class="pill-label">TIME</span>
+            <span id="hud-timer" class="pill-value highlight-timer">60s</span>
+          </div>
+
+          <div class="stat-pill wicket-pill">
+            <span class="pill-label">Wickets</span>
+            <span id="hud-wickets" class="pill-value">0/3</span>
+          </div>
+        </div>
+
+        <!-- Target Score & Multiplier Info -->
+        <div class="hud-sub-bar">
+          <div class="multiplier-badge" id="multiplier-badge">x1.0 POWER</div>
+          <div class="balls-tracker" id="balls-tracker">
+            <span class="ball-dot"></span>
+            <span class="ball-dot"></span>
+            <span class="ball-dot"></span>
+            <span class="ball-dot"></span>
+            <span class="ball-dot"></span>
+            <span class="ball-dot"></span>
+          </div>
+        </div>
+
+        <!-- Popup Shot Callouts (SIX!, FOUR!, PERFECT!, WICKET!) -->
+        <div id="shot-callout" class="shot-callout hidden">
+          <div id="callout-text" class="callout-text">SIX!</div>
+          <div id="callout-sub" class="callout-sub">PERFECT TIMING • 112m</div>
+        </div>
+
+        <!-- Touch/Swipe One-Handed Control Zone Overlay -->
+        <div id="touch-control-zone" class="touch-control-zone">
+          <div class="touch-hint" id="touch-hint">
+            <div class="swipe-arrow-indicator"></div>
+            <span>SWIPE or TAP to play shot</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Menu Screen -->
+      <div id="main-menu-screen" class="overlay-screen">
+        <div class="brand-header">
+          <div class="logo-badge">⚡ BLITZ CRICKET ⚡</div>
+          <h1 class="game-title">CRICKET<br><span class="highlight-text">SMASH</span></h1>
+          <p class="game-subtitle">1-Minute One-Handed Action</p>
+        </div>
+
+        <div class="menu-hero-card">
+          <div class="high-score-box">
+            <span class="box-label">BEST BLITZ SCORE</span>
+            <span id="menu-high-score" class="box-value">0</span>
+          </div>
+          <div class="coins-box">
+            <span class="coin-icon">🪙</span>
+            <span id="menu-coins" class="coin-amount">0</span>
+          </div>
+        </div>
+
+        <div class="menu-actions">
+          <button id="btn-play-blitz" class="btn-primary btn-pulse">
+            <span class="btn-icon">⏱️</span>
+            <span class="btn-text">1-MIN SMASH BLITZ</span>
+          </button>
+
+          <button id="btn-play-super-over" class="btn-secondary">
+            <span class="btn-icon">🏏</span>
+            <span class="btn-text">SUPER OVER (6 BALLS)</span>
+          </button>
+
+          <div class="menu-sub-actions">
+            <button id="btn-shop" class="btn-icon-label">
+              <span class="icon">👕</span>
+              <span>LOCKER ROOM</span>
+            </button>
+            <button id="btn-leaderboard" class="btn-icon-label">
+              <span class="icon">🏆</span>
+              <span>RANKS</span>
+            </button>
+            <button id="btn-sound-toggle" class="btn-icon-label">
+              <span id="sound-icon" class="icon">🔊</span>
+              <span>SOUND</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- One-Handed Play Tip -->
+        <div class="one-hand-tip">
+          <span>📱 Swipe anywhere on lower screen to hit shots!</span>
+        </div>
+      </div>
+
+      <!-- Shop / Locker Room Screen -->
+      <div id="shop-screen" class="overlay-screen hidden">
+        <div class="screen-header">
+          <h2>LOCKER ROOM</h2>
+          <button id="btn-close-shop" class="btn-close">✕</button>
+        </div>
+
+        <div class="currency-bar">
+          <span>YOUR COINS:</span>
+          <span class="coin-amount"><span class="coin-icon">🪙</span> <span id="shop-coins">0</span></span>
+        </div>
+
+        <!-- Shop Tabs -->
+        <div class="shop-tabs">
+          <button class="shop-tab active" data-tab="bats">🏏 BATS</button>
+          <button class="shop-tab" data-tab="helmets">🪖 HELMETS</button>
+          <button class="shop-tab" data-tab="stadiums">🏟️ STADIUMS</button>
+        </div>
+
+        <!-- Shop Grid Container -->
+        <div id="shop-items-grid" class="shop-items-grid">
+          <!-- Dynamically populated via JS -->
+        </div>
+      </div>
+
+      <!-- Leaderboard Screen -->
+      <div id="leaderboard-screen" class="overlay-screen hidden">
+        <div class="screen-header">
+          <h2>GLOBAL RANKS</h2>
+          <button id="btn-close-leaderboard" class="btn-close">✕</button>
+        </div>
+
+        <div class="player-name-bar">
+          <span>PLAYER NAME:</span>
+          <input type="text" id="player-name-input" maxlength="12" value="SmashChamp" placeholder="Enter Name">
+        </div>
+
+        <div class="leaderboard-list" id="leaderboard-list">
+          <!-- Dynamically populated via JS -->
+        </div>
+      </div>
+
+      <!-- Match Summary / Game Over Screen -->
+      <div id="game-over-screen" class="overlay-screen hidden">
+        <div class="summary-card">
+          <div id="summary-badge" class="summary-badge">MATCH OVER!</div>
+          <h2 id="summary-title">SMASH COMPLETED</h2>
+          
+          <div class="summary-main-score">
+            <span class="runs-num" id="summary-runs">0</span>
+            <span class="runs-unit">RUNS</span>
+          </div>
+
+          <div class="summary-grid">
+            <div class="stat-item">
+              <span class="label">6s Hit</span>
+              <span class="value" id="summary-sixes">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="label">4s Hit</span>
+              <span class="value" id="summary-fours">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="label">Strike Rate</span>
+              <span class="value" id="summary-sr">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="label">Coins Won</span>
+              <span class="value" id="summary-coins">+0 🪙</span>
+            </div>
+          </div>
+
+          <div id="new-high-score-banner" class="new-high-score-banner hidden">
+            🎉 NEW HIGH SCORE! 🎉
+          </div>
+
+          <div class="summary-actions">
+            <button id="btn-play-again" class="btn-primary">PLAY AGAIN 🔄</button>
+            <button id="btn-menu-from-summary" class="btn-secondary">MAIN MENU 🏠</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Game Scripts -->
+  <script src="js/audio.js"></script>
+  <script src="js/shop.js"></script>
+  <script src="js/leaderboard.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
