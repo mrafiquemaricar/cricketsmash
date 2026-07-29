@@ -1,27 +1,36 @@
 /**
  * Shop & Unlockables System for Cricket Smash
- * Manages bats, helmets, stadiums, coin balance, and persistence.
  */
 
 class ShopManager {
   constructor() {
-    this.coins = parseInt(localStorage.getItem('cricket_coins')) || 100; // Starter bonus
+    this.coins = parseInt(safeGetStorage('cricket_coins', '100')) || 100;
     
-    // Equipped items
     this.equipped = {
-      bat: localStorage.getItem('cricket_equipped_bat') || 'classic',
-      helmet: localStorage.getItem('cricket_equipped_helmet') || 'blue_helm',
-      stadium: localStorage.getItem('cricket_equipped_stadium') || 'park'
+      bat: safeGetStorage('cricket_equipped_bat', 'classic'),
+      helmet: safeGetStorage('cricket_equipped_helmet', 'blue_helm'),
+      stadium: safeGetStorage('cricket_equipped_stadium', 'park')
     };
 
-    // Unlocked items arrays
+    let unlockedBats = ['classic'];
+    let unlockedHelmets = ['blue_helm'];
+    let unlockedStadiums = ['park'];
+
+    try {
+      const b = safeGetStorage('cricket_unlocked_bats', null);
+      if (b) unlockedBats = JSON.parse(b);
+      const h = safeGetStorage('cricket_unlocked_helmets', null);
+      if (h) unlockedHelmets = JSON.parse(h);
+      const s = safeGetStorage('cricket_unlocked_stadiums', null);
+      if (s) unlockedStadiums = JSON.parse(s);
+    } catch (e) {}
+
     this.unlocked = {
-      bats: JSON.parse(localStorage.getItem('cricket_unlocked_bats')) || ['classic'],
-      helmets: JSON.parse(localStorage.getItem('cricket_unlocked_helmets')) || ['blue_helm'],
-      stadiums: JSON.parse(localStorage.getItem('cricket_unlocked_stadiums')) || ['park']
+      bats: unlockedBats,
+      helmets: unlockedHelmets,
+      stadiums: unlockedStadiums
     };
 
-    // Items Catalog Definition
     this.catalog = {
       bats: [
         {
@@ -133,13 +142,13 @@ class ShopManager {
   }
 
   save() {
-    localStorage.setItem('cricket_coins', this.coins);
-    localStorage.setItem('cricket_equipped_bat', this.equipped.bat);
-    localStorage.setItem('cricket_equipped_helmet', this.equipped.helmet);
-    localStorage.setItem('cricket_equipped_stadium', this.equipped.stadium);
-    localStorage.setItem('cricket_unlocked_bats', JSON.stringify(this.unlocked.bats));
-    localStorage.setItem('cricket_unlocked_helmets', JSON.stringify(this.unlocked.helmets));
-    localStorage.setItem('cricket_unlocked_stadiums', JSON.stringify(this.unlocked.stadiums));
+    safeSetStorage('cricket_coins', this.coins.toString());
+    safeSetStorage('cricket_equipped_bat', this.equipped.bat);
+    safeSetStorage('cricket_equipped_helmet', this.equipped.helmet);
+    safeSetStorage('cricket_equipped_stadium', this.equipped.stadium);
+    safeSetStorage('cricket_unlocked_bats', JSON.stringify(this.unlocked.bats));
+    safeSetStorage('cricket_unlocked_helmets', JSON.stringify(this.unlocked.helmets));
+    safeSetStorage('cricket_unlocked_stadiums', JSON.stringify(this.unlocked.stadiums));
   }
 
   addCoins(amount) {
@@ -169,7 +178,6 @@ class ShopManager {
     const unlockedList = this.unlocked[category];
 
     if (unlockedList.includes(itemId)) {
-      // Equip item
       this.equipped[category.replace(/s$/, '')] = itemId;
       this.save();
       window.soundEngine.playClick();
@@ -180,7 +188,6 @@ class ShopManager {
       return { success: false, msg: 'Not enough coins!' };
     }
 
-    // Purchase item
     this.coins -= item.price;
     unlockedList.push(itemId);
     this.equipped[category.replace(/s$/, '')] = itemId;

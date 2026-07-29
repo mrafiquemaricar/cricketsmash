@@ -1,14 +1,12 @@
 /**
  * Global High Scores & Leaderboard Manager
- * Manages player scores, local bests, and dynamic global leaderboard rankings.
  */
 class LeaderboardManager {
   constructor() {
-    this.playerName = localStorage.getItem('cricket_player_name') || 'SmashMaster';
-    this.highScore = parseInt(localStorage.getItem('cricket_high_score')) || 0;
-    this.totalSixes = parseInt(localStorage.getItem('cricket_total_sixes')) || 0;
+    this.playerName = safeGetStorage('cricket_player_name', 'SmashMaster');
+    this.highScore = parseInt(safeGetStorage('cricket_high_score', '0')) || 0;
+    this.totalSixes = parseInt(safeGetStorage('cricket_total_sixes', '0')) || 0;
     
-    // Default Global Leaderboard template
     this.defaultLeaders = [
       { name: 'VIRAT_LEGEND', score: 148, sixes: 22, bat: '⚡ Thunderbolt' },
       { name: 'KING_DHONI', score: 132, sixes: 19, bat: '🔥 Flame Strike' },
@@ -26,12 +24,12 @@ class LeaderboardManager {
   setPlayerName(name) {
     if (!name || !name.trim()) return;
     this.playerName = name.trim().substring(0, 12);
-    localStorage.setItem('cricket_player_name', this.playerName);
+    safeSetStorage('cricket_player_name', this.playerName);
     this.saveGlobalRanks();
   }
 
   loadGlobalRanks() {
-    const stored = localStorage.getItem('cricket_global_ranks');
+    const stored = safeGetStorage('cricket_global_ranks', null);
     if (stored) {
       try {
         this.ranks = JSON.parse(stored);
@@ -47,7 +45,6 @@ class LeaderboardManager {
 
   updateUserInRanks() {
     if (this.highScore > 0) {
-      // Find or insert user entry
       let userEntry = this.ranks.find(r => r.isUser);
       if (userEntry) {
         userEntry.score = Math.max(userEntry.score, this.highScore);
@@ -65,24 +62,23 @@ class LeaderboardManager {
       }
     }
 
-    // Sort descending by score
     this.ranks.sort((a, b) => b.score - a.score);
     this.saveGlobalRanks();
   }
 
   saveGlobalRanks() {
-    localStorage.setItem('cricket_global_ranks', JSON.stringify(this.ranks));
+    safeSetStorage('cricket_global_ranks', JSON.stringify(this.ranks));
   }
 
   submitMatchScore(runs, sixes, fours) {
     let isNewHigh = false;
 
     this.totalSixes += sixes;
-    localStorage.setItem('cricket_total_sixes', this.totalSixes);
+    safeSetStorage('cricket_total_sixes', this.totalSixes.toString());
 
     if (runs > this.highScore) {
       this.highScore = runs;
-      localStorage.setItem('cricket_high_score', this.highScore);
+      safeSetStorage('cricket_high_score', this.highScore.toString());
       isNewHigh = true;
     }
 
