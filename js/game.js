@@ -24,11 +24,6 @@ class CricketGame {
     this.consecutiveHits = 0;
     this.wicketArmorUsed = false;
 
-    // Timing & Physics Window (in ms)
-    this.perfectWindow = 70;  // +/- ms for PERFECT (SIX)
-    this.greatWindow = 135;   // +/- ms for GREAT (FOUR)
-    this.goodWindow = 190;    // +/- ms for GOOD (SINGLE)
-
     // World perspective dimensions
     this.width = 400;
     this.height = 700;
@@ -41,15 +36,15 @@ class CricketGame {
     this.particles = [];
     this.callouts = [];
 
-    // Gesture Tracking
+    // Gesture & Input Tracking
     this.touchStart = null;
     this.isSwiping = false;
     this.shotExecuted = false;
+    this.pendingShot = null;
 
     // Camera Shake / Zoom
     this.cameraShake = 0;
     this.cameraZoom = 1.0;
-    this.slowMoTimer = 0;
 
     this.bindEvents();
     this.resizeCanvas();
@@ -67,24 +62,23 @@ class CricketGame {
   bindEvents() {
     window.addEventListener('resize', () => this.resizeCanvas());
 
-    // One-handed touch, mouse & swipe listeners attached to window
+    // Unified pointer/mouse/touch listener attached to window
     const handleStart = (e) => {
       if (this.state !== 'PLAYING') return;
-      // Prevent button clicks from triggering shot prematurely
-      if (e.target && e.target.tagName === 'BUTTON') return;
+      if (e.target && (e.target.tagName === 'BUTTON' || e.target.closest('button'))) return;
       
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+      const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
       this.touchStart = { x: clientX, y: clientY, time: performance.now() };
       this.isSwiping = true;
     };
 
     const handleEnd = (e) => {
-      if (this.state !== 'PLAYING' || !this.touchStart || this.shotExecuted) return;
-      if (e.target && e.target.tagName === 'BUTTON') return;
+      if (this.state !== 'PLAYING' || !this.touchStart) return;
+      if (e.target && (e.target.tagName === 'BUTTON' || e.target.closest('button'))) return;
 
-      const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
-      const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+      const clientX = e.clientX || (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : 0);
+      const clientY = e.clientY || (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientY : 0);
 
       const dx = clientX - this.touchStart.x;
       const dy = clientY - this.touchStart.y;
@@ -104,25 +98,23 @@ class CricketGame {
       this.touchStart = null;
     };
 
-    window.addEventListener('mousedown', handleStart);
-    window.addEventListener('mouseup', handleEnd);
-    window.addEventListener('touchstart', handleStart, { passive: true });
-    window.addEventListener('touchend', handleEnd, { passive: true });
+    window.addEventListener('pointerdown', handleStart);
+    window.addEventListener('pointerup', handleEnd);
 
-    // Desktop Keyboard Controls (Spacebar, WASD, Arrow Keys)
+    // Desktop Keyboard Controls (Spacebar, WASD, Arrow Keys, Enter)
     window.addEventListener('keydown', (e) => {
-      if (this.state !== 'PLAYING' || this.shotExecuted) return;
+      if (this.state !== 'PLAYING') return;
       const code = e.code;
-      if (code === 'Space' || code === 'KeyW' || code === 'ArrowUp') {
+      if (['Space', 'Enter', 'KeyW', 'ArrowUp'].includes(code)) {
         e.preventDefault();
         this.playShot('UP');
-      } else if (code === 'KeyA' || code === 'ArrowLeft') {
+      } else if (['KeyA', 'ArrowLeft'].includes(code)) {
         e.preventDefault();
         this.playShot('LEFT');
-      } else if (code === 'KeyD' || code === 'ArrowRight') {
+      } else if (['KeyD', 'ArrowRight'].includes(code)) {
         e.preventDefault();
         this.playShot('RIGHT');
-      } else if (code === 'KeyS' || code === 'ArrowDown') {
+      } else if (['KeyS', 'ArrowDown'].includes(code)) {
         e.preventDefault();
         this.playShot('DOWN');
       }
@@ -209,6 +201,7 @@ class CricketGame {
     if (this.state !== 'PLAYING') return;
 
     this.shotExecuted = false;
+    this.pendingShot = null;
     this.batsman.animState = 'READY';
     this.batsman.swingProgress = 0;
 
@@ -247,52 +240,51 @@ class CricketGame {
   }
 
   playShot(direction = 'STRAIGHT') {
-    if (!this.ball || this.ball.state !== 'IN_AIR' && this.ball.state !== 'PITCHED' || this.shotExecuted) {
-      return;
-    }
+    if (!this.ball) return;
+    if (this.ball.state === 'HIT' || this.ball.state === 'OUT') return;
 
-    this.shotExecuted = true;
-    this.ballsFaced++;
+    // Always trigger visual swing animation
     this.batsman.animState = 'SWINGING';
     this.batsman.swingProgress = 0;
 
-    // Calculate timing delta (difference between current time and ball reaching batting crease)
-    const creaseY = this.batsman.y;
-    const distanceToCrease = Math.abs(this.ball.y - creaseY);
-    const timeDelta = (distanceToCrease / this.ball.speed) * 16.6; // Approximate ms
+    // Queue shot if bowler hasn't released ball yet
+    if (this.ball.state === 'WAITING') {
+      this.pendingShot = direction;
+      return;
+    }
+
+    if (this.shotExecuted) return; // Prevent double swing on single delivery
+
+    this.shotExecuted = true;
+    this.ballsFaced++;
+
+    const creaseY = this.batsman.y - 20;
+    const distToCrease = Math.abs(this.ball.y - creaseY);
 
     const bat = window.shopManager.getBat();
     const powerMultiplier = bat.powerBoost || 1.0;
 
-    // Check hit quality
     let quality = 'MISS';
-    if (timeDelta <= this.perfectWindow) quality = 'PERFECT';
-    else if (timeDelta <= this.greatWindow) quality = 'GREAT';
-    else if (timeDelta <= this.goodWindow) quality = 'GOOD';
+    if (distToCrease <= 40) quality = 'PERFECT';
+    else if (distToCrease <= 75) quality = 'GREAT';
+    else if (distToCrease <= 115) quality = 'GOOD';
+    else if (distToCrease <= 145) quality = 'EDGE';
     else quality = 'MISS';
 
     if (quality !== 'MISS') {
-      // Successful Hit!
+      // Hit Ball!
       this.ball.state = 'HIT';
       this.consecutiveHits++;
-
-      // Update multiplier
       if (this.consecutiveHits >= 3) this.multiplier = Math.min(3.0, this.multiplier + 0.5);
 
       let runs = 0;
-      let angleOffset = 0;
-      if (direction === 'LEFT') angleOffset = -Math.PI / 4;
-      if (direction === 'RIGHT') angleOffset = Math.PI / 4;
-      if (direction === 'DOWN') angleOffset = Math.PI / 8;
-
       if (quality === 'PERFECT') {
         runs = 6;
         this.sixes++;
         window.soundEngine.playHit('six');
         this.triggerCameraEffect('SIX');
         if (window.uiManager) window.uiManager.showCallout('SIX!', `PERFECT TIMING • ${Math.floor(100 + Math.random() * 25)}m`, 'six');
-        
-        // Launch trajectory high in air over boundary
+
         this.ball.vx = (Math.random() * 4 - 2 + (direction === 'LEFT' ? -6 : direction === 'RIGHT' ? 6 : 0)) * powerMultiplier;
         this.ball.vy = -14 * powerMultiplier;
         this.ball.vz = 16 * powerMultiplier;
@@ -307,54 +299,35 @@ class CricketGame {
         this.ball.vx = (Math.random() * 6 - 3 + (direction === 'LEFT' ? -8 : direction === 'RIGHT' ? 8 : 0)) * powerMultiplier;
         this.ball.vy = -11 * powerMultiplier;
         this.ball.vz = 4;
-      } else { // GOOD
+      } else if (quality === 'GOOD') {
         runs = Math.random() > 0.5 ? 2 : 1;
         this.singles += runs;
         window.soundEngine.playHit('good');
-        if (window.uiManager) window.uiManager.showCallout(`${runs} RUN!`, 'GOOD CONTACT', 'single');
+        if (window.uiManager) window.uiManager.showCallout(`${runs} RUN`, 'GOOD CONTACT', 'single');
 
         this.ball.vx = (Math.random() * 8 - 4) * powerMultiplier;
         this.ball.vy = -6 * powerMultiplier;
         this.ball.vz = 2;
+      } else { // EDGE
+        runs = 1;
+        this.singles += runs;
+        window.soundEngine.playHit('good');
+        if (window.uiManager) window.uiManager.showCallout('1 RUN', 'OUTSIDE EDGE', 'single');
+
+        this.ball.vx = (direction === 'RIGHT' ? -4 : 4) * powerMultiplier;
+        this.ball.vy = -4 * powerMultiplier;
+        this.ball.vz = 1;
       }
 
       const totalRuns = Math.round(runs * this.multiplier);
       this.score += totalRuns;
-      window.shopManager.addCoins(totalRuns * 2); // 2 coins per run
+      window.shopManager.addCoins(totalRuns * 2);
 
       setTimeout(() => this.nextDelivery(), 1600);
-
     } else {
-      // Missed / Wicket / Dot
-      if (Math.abs(this.ball.x - this.batsman.x) < 25 && this.ball.y >= this.batsman.y - 30) {
-        // BOWLED / WICKET!
-        this.stumps.bailsOn = false;
-        this.ball.state = 'OUT';
-        this.wickets++;
-        this.consecutiveHits = 0;
-        this.multiplier = 1.0;
-
-        window.soundEngine.playWicket();
-        this.triggerCameraEffect('WICKET');
-        if (window.uiManager) window.uiManager.showCallout('WICKET!', 'BOWLED OUT!', 'wicket');
-
-        if (this.wickets >= this.maxWickets || (this.mode === 'SUPER_OVER' && this.ballsFaced >= 6)) {
-          setTimeout(() => this.endMatch(), 1800);
-        } else {
-          setTimeout(() => this.nextDelivery(), 1800);
-        }
-      } else {
-        // DOT BALL
-        this.ball.state = 'OUT';
-        this.consecutiveHits = 0;
-        if (window.uiManager) window.uiManager.showCallout('DOT BALL', 'NO RUN', 'single');
-
-        if (this.mode === 'SUPER_OVER' && this.ballsFaced >= 6) {
-          setTimeout(() => this.endMatch(), 1600);
-        } else {
-          setTimeout(() => this.nextDelivery(), 1600);
-        }
-      }
+      // Swung early or late (Miss) - Do not cancel ball, let it fly!
+      this.consecutiveHits = 0;
+      if (window.uiManager) window.uiManager.showCallout('MISSED', 'SWUNG EARLY', 'single');
     }
 
     if (window.uiManager) window.uiManager.updateHUD();
@@ -363,7 +336,6 @@ class CricketGame {
   triggerCameraEffect(type) {
     if (type === 'SIX') {
       this.cameraShake = 12;
-      this.slowMoTimer = 20;
     } else if (type === 'FOUR') {
       this.cameraShake = 6;
     } else if (type === 'WICKET') {
@@ -431,6 +403,15 @@ class CricketGame {
       }
     }
 
+    // Process queued shot when ball enters striking zone
+    if (this.pendingShot && this.ball && (this.ball.state === 'IN_AIR' || this.ball.state === 'PITCHED')) {
+      if (this.ball.y >= this.batsman.y - 140) {
+        const shotDir = this.pendingShot;
+        this.pendingShot = null;
+        this.playShot(shotDir);
+      }
+    }
+
     // Ball Delivery Physics
     if (this.ball && (this.ball.state === 'IN_AIR' || this.ball.state === 'PITCHED')) {
       this.ball.x += this.ball.vx;
@@ -442,20 +423,21 @@ class CricketGame {
         this.ball.z = 5;
         window.soundEngine.playBounce();
 
-        // Apply swing/seam deviation
         if (this.ball.type === 'OUTSWING') this.ball.vx += 1.2;
         if (this.ball.type === 'INSWING') this.ball.vx -= 1.2;
       }
 
-      // Ball missed past crease -> Bowled check if no shot played
-      if (this.ball.y > this.batsman.y + 40 && !this.shotExecuted) {
-        this.shotExecuted = true;
-        this.ballsFaced++;
+      // Ball missed past crease -> Bowled / Dot check
+      if (this.ball.y > this.batsman.y + 40 && this.ball.state !== 'HIT' && this.ball.state !== 'OUT') {
+        this.ball.state = 'OUT';
+        if (!this.shotExecuted) {
+          this.ballsFaced++;
+          this.shotExecuted = true;
+        }
 
         if (Math.abs(this.ball.x - this.stumps.x) < 22) {
           // Bowled!
           this.stumps.bailsOn = false;
-          this.ball.state = 'OUT';
           this.wickets++;
           window.soundEngine.playWicket();
           if (window.uiManager) window.uiManager.showCallout('BOWLED!', 'WICKET!', 'wicket');
@@ -467,8 +449,7 @@ class CricketGame {
           }
         } else {
           // Dot Ball
-          this.ball.state = 'OUT';
-          if (window.uiManager) window.uiManager.showCallout('DOT BALL', 'MISSED', 'single');
+          if (window.uiManager) window.uiManager.showCallout('DOT BALL', 'NO RUN', 'single');
 
           if (this.mode === 'SUPER_OVER' && this.ballsFaced >= 6) {
             setTimeout(() => this.endMatch(), 1600);
@@ -528,7 +509,6 @@ class CricketGame {
     const stadium = window.shopManager.getStadium();
     
     if (stadium.id === 'cyber') {
-      // Cyber Neon Stadium Theme
       const grad = this.ctx.createLinearGradient(0, 0, 0, this.height);
       grad.addColorStop(0, '#050515');
       grad.addColorStop(0.5, '#0f172a');
@@ -536,7 +516,6 @@ class CricketGame {
       this.ctx.fillStyle = grad;
       this.ctx.fillRect(0, 0, this.width, this.height);
 
-      // Neon glowing boundary ring
       this.ctx.strokeStyle = '#06b6d4';
       this.ctx.shadowColor = '#06b6d4';
       this.ctx.shadowBlur = 15;
@@ -546,7 +525,6 @@ class CricketGame {
       this.ctx.stroke();
       this.ctx.shadowBlur = 0;
     } else if (stadium.id === 'colosseum') {
-      // Golden Sand Arena Theme
       const grad = this.ctx.createLinearGradient(0, 0, 0, this.height);
       grad.addColorStop(0, '#451a03');
       grad.addColorStop(0.5, '#78350f');
@@ -560,7 +538,6 @@ class CricketGame {
       this.ctx.ellipse(this.width / 2, this.height * 0.45, this.width * 0.45, this.height * 0.38, 0, 0, Math.PI * 2);
       this.ctx.stroke();
     } else if (stadium.id === 'oval') {
-      // Royal Oval Night Arena
       const grad = this.ctx.createRadialGradient(this.width / 2, this.height / 2, 50, this.width / 2, this.height / 2, 400);
       grad.addColorStop(0, '#15803d');
       grad.addColorStop(0.7, '#166534');
@@ -568,14 +545,12 @@ class CricketGame {
       this.ctx.fillStyle = grad;
       this.ctx.fillRect(0, 0, this.width, this.height);
 
-      // White boundary rope
       this.ctx.strokeStyle = '#ffffff';
       this.ctx.lineWidth = 3;
       this.ctx.beginPath();
       this.ctx.ellipse(this.width / 2, this.height * 0.45, this.width * 0.45, this.height * 0.38, 0, 0, Math.PI * 2);
       this.ctx.stroke();
     } else {
-      // Local Park Sunny Theme (Default)
       const grad = this.ctx.createRadialGradient(this.width / 2, this.height / 2, 50, this.width / 2, this.height / 2, 400);
       grad.addColorStop(0, '#22c55e');
       grad.addColorStop(0.7, '#15803d');
@@ -583,7 +558,6 @@ class CricketGame {
       this.ctx.fillStyle = grad;
       this.ctx.fillRect(0, 0, this.width, this.height);
 
-      // Boundary rope line
       this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
       this.ctx.lineWidth = 3;
       this.ctx.beginPath();
@@ -593,26 +567,22 @@ class CricketGame {
   }
 
   drawPitch() {
-    // 3D Trapezoid Pitch Perspective
-    this.ctx.fillStyle = '#d97706'; // Pitch dirt color
+    this.ctx.fillStyle = '#d97706';
     this.ctx.beginPath();
-    this.ctx.moveTo(this.width / 2 - 35, 120); // Top left (bowler end)
-    this.ctx.lineTo(this.width / 2 + 35, 120); // Top right
-    this.ctx.lineTo(this.width / 2 + 65, this.height - 80); // Bottom right (batsman end)
-    this.ctx.lineTo(this.width / 2 - 65, this.height - 80); // Bottom left
+    this.ctx.moveTo(this.width / 2 - 35, 120);
+    this.ctx.lineTo(this.width / 2 + 35, 120);
+    this.ctx.lineTo(this.width / 2 + 65, this.height - 80);
+    this.ctx.lineTo(this.width / 2 - 65, this.height - 80);
     this.ctx.closePath();
     this.ctx.fill();
 
-    // Crease Lines
     this.ctx.strokeStyle = '#ffffff';
     this.ctx.lineWidth = 2;
-    // Bowling Crease
     this.ctx.beginPath();
     this.ctx.moveTo(this.width / 2 - 38, 140);
     this.ctx.lineTo(this.width / 2 + 38, 140);
     this.ctx.stroke();
 
-    // Batting Popping Crease
     this.ctx.beginPath();
     this.ctx.moveTo(this.width / 2 - 60, this.height - 110);
     this.ctx.lineTo(this.width / 2 + 60, this.height - 110);
@@ -625,7 +595,6 @@ class CricketGame {
     const helm = window.shopManager.getHelmet();
     const showHUD = helm.id === 'cyber_helm';
 
-    // Target landing circle
     this.ctx.strokeStyle = this.ball.type === 'SLOW' ? '#38bdf8' : '#ef4444';
     this.ctx.lineWidth = showHUD ? 3 : 2;
     this.ctx.beginPath();
@@ -633,7 +602,6 @@ class CricketGame {
     this.ctx.stroke();
 
     if (showHUD) {
-      // Cyber Visor trajectory arc line
       this.ctx.setLineDash([4, 4]);
       this.ctx.strokeStyle = '#06b6d4';
       this.ctx.beginPath();
@@ -650,12 +618,10 @@ class CricketGame {
     const sy = this.stumps.y;
 
     this.ctx.fillStyle = '#fbbf24';
-    // 3 Stumps
     for (let i = -1; i <= 1; i++) {
       this.ctx.fillRect(sx + i * 8 - 2, sy - 25, 4, 25);
     }
 
-    // Bails
     if (this.stumps.bailsOn) {
       this.ctx.fillStyle = '#ef4444';
       this.ctx.fillRect(sx - 11, sy - 27, 22, 3);
@@ -667,13 +633,11 @@ class CricketGame {
     const bx = this.bowler.x;
     const by = this.bowler.y;
 
-    // Bowler Head
     this.ctx.fillStyle = '#38bdf8';
     this.ctx.beginPath();
     this.ctx.arc(bx, by - 16, 7, 0, Math.PI * 2);
     this.ctx.fill();
 
-    // Bowler Body
     this.ctx.fillStyle = '#1e293b';
     this.ctx.fillRect(bx - 6, by - 9, 12, 16);
   }
@@ -686,44 +650,36 @@ class CricketGame {
     const bat = window.shopManager.getBat();
     const helm = window.shopManager.getHelmet();
 
-    // Batsman Body & Stance
     this.ctx.save();
     this.ctx.translate(bx, by);
 
-    // Helmet Color
     this.ctx.fillStyle = helm.id === 'golden_helm' ? '#fbbf24' : helm.id === 'cyber_helm' ? '#06b6d4' : '#2563eb';
     this.ctx.beginPath();
     this.ctx.arc(0, -32, 11, 0, Math.PI * 2);
     this.ctx.fill();
 
-    // Visor
     this.ctx.fillStyle = '#0f172a';
     this.ctx.fillRect(-6, -32, 12, 4);
 
-    // Jersey Body
     this.ctx.fillStyle = '#dc2626';
     this.ctx.fillRect(-12, -20, 24, 26);
 
-    // Batting Pads
     this.ctx.fillStyle = '#f8fafc';
     this.ctx.fillRect(-10, 6, 8, 20);
     this.ctx.fillRect(2, 6, 8, 20);
 
-    // Bat Swing Render
     this.ctx.save();
     if (this.batsman.animState === 'SWINGING') {
       this.batsman.swingProgress = Math.min(1.0, this.batsman.swingProgress + 0.15);
       const angle = -Math.PI / 4 + (this.batsman.swingProgress * Math.PI * 0.8);
       this.ctx.rotate(angle);
     } else {
-      this.ctx.rotate(-0.3); // Ready Stance angle
+      this.ctx.rotate(-0.3);
     }
 
-    // Bat Handle & Blade
     this.ctx.fillStyle = bat.id === 'golden' ? '#fbbf24' : bat.id === 'flame' ? '#ea580c' : bat.id === 'thunderbolt' ? '#0284c7' : '#d97706';
     this.ctx.fillRect(8, -18, 6, 32);
 
-    // Bat Trail Effect
     if (bat.trail === 'lightning') {
       this.ctx.strokeStyle = '#38bdf8';
       this.ctx.shadowColor = '#38bdf8';
@@ -749,7 +705,7 @@ class CricketGame {
     const radius = 6 * scale;
 
     this.ctx.save();
-    this.ctx.fillStyle = '#dc2626'; // Red Leather Cricket Ball
+    this.ctx.fillStyle = '#dc2626';
     this.ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
     this.ctx.shadowOffsetY = this.ball.z;
     this.ctx.shadowBlur = 6;
@@ -758,7 +714,6 @@ class CricketGame {
     this.ctx.arc(this.ball.x, this.ball.y - this.ball.z, radius, 0, Math.PI * 2);
     this.ctx.fill();
 
-    // Seam line
     this.ctx.strokeStyle = '#ffffff';
     this.ctx.lineWidth = 1;
     this.ctx.beginPath();
