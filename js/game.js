@@ -67,9 +67,12 @@ class CricketGame {
   bindEvents() {
     window.addEventListener('resize', () => this.resizeCanvas());
 
-    // One-handed touch & swipe listeners
+    // One-handed touch, mouse & swipe listeners attached to window
     const handleStart = (e) => {
       if (this.state !== 'PLAYING') return;
+      // Prevent button clicks from triggering shot prematurely
+      if (e.target && e.target.tagName === 'BUTTON') return;
+      
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
       this.touchStart = { x: clientX, y: clientY, time: performance.now() };
@@ -78,6 +81,8 @@ class CricketGame {
 
     const handleEnd = (e) => {
       if (this.state !== 'PLAYING' || !this.touchStart || this.shotExecuted) return;
+      if (e.target && e.target.tagName === 'BUTTON') return;
+
       const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
       const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
 
@@ -86,7 +91,7 @@ class CricketGame {
       const dist = Math.hypot(dx, dy);
 
       let shotDirection = 'STRAIGHT';
-      if (dist > 25) {
+      if (dist > 20) {
         const angle = Math.atan2(dy, dx) * (180 / Math.PI);
         if (angle < -135 || angle > 135) shotDirection = 'LEFT'; // Swipe Left -> Pull/Cut
         else if (angle > -45 && angle < 45) shotDirection = 'RIGHT'; // Swipe Right -> Cover Drive
@@ -99,10 +104,29 @@ class CricketGame {
       this.touchStart = null;
     };
 
-    this.canvas.addEventListener('mousedown', handleStart);
-    this.canvas.addEventListener('mouseup', handleEnd);
-    this.canvas.addEventListener('touchstart', handleStart, { passive: true });
-    this.canvas.addEventListener('touchend', handleEnd, { passive: true });
+    window.addEventListener('mousedown', handleStart);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchstart', handleStart, { passive: true });
+    window.addEventListener('touchend', handleEnd, { passive: true });
+
+    // Desktop Keyboard Controls (Spacebar, WASD, Arrow Keys)
+    window.addEventListener('keydown', (e) => {
+      if (this.state !== 'PLAYING' || this.shotExecuted) return;
+      const code = e.code;
+      if (code === 'Space' || code === 'KeyW' || code === 'ArrowUp') {
+        e.preventDefault();
+        this.playShot('UP');
+      } else if (code === 'KeyA' || code === 'ArrowLeft') {
+        e.preventDefault();
+        this.playShot('LEFT');
+      } else if (code === 'KeyD' || code === 'ArrowRight') {
+        e.preventDefault();
+        this.playShot('RIGHT');
+      } else if (code === 'KeyS' || code === 'ArrowDown') {
+        e.preventDefault();
+        this.playShot('DOWN');
+      }
+    });
   }
 
   startMatch(mode = 'BLITZ') {
