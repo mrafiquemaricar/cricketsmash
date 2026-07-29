@@ -102,23 +102,35 @@ class CricketGame {
     window.addEventListener('pointerup', handleEnd);
 
     // Desktop Keyboard Controls (Spacebar, WASD, Arrow Keys, Enter)
-    window.addEventListener('keydown', (e) => {
+    const handleGameKey = (e) => {
       if (this.state !== 'PLAYING') return;
-      const code = e.code;
-      if (['Space', 'Enter', 'KeyW', 'ArrowUp'].includes(code)) {
+
+      const code = e.code || '';
+      const key = (e.key || '').toLowerCase();
+      const keyCode = e.keyCode || 0;
+
+      const isUp = code === 'Space' || code === 'Enter' || code === 'ArrowUp' || code === 'KeyW' || key === ' ' || key === 'spacebar' || key === 'enter' || key === 'w' || key === 'arrowup' || keyCode === 32 || keyCode === 13 || keyCode === 38;
+      const isLeft = code === 'ArrowLeft' || code === 'KeyA' || key === 'a' || key === 'arrowleft' || keyCode === 37;
+      const isRight = code === 'ArrowRight' || code === 'KeyD' || key === 'd' || key === 'arrowright' || keyCode === 39;
+      const isDown = code === 'ArrowDown' || code === 'KeyS' || key === 's' || key === 'arrowdown' || keyCode === 40;
+
+      if (isUp) {
         e.preventDefault();
         this.playShot('UP');
-      } else if (['KeyA', 'ArrowLeft'].includes(code)) {
+      } else if (isLeft) {
         e.preventDefault();
         this.playShot('LEFT');
-      } else if (['KeyD', 'ArrowRight'].includes(code)) {
+      } else if (isRight) {
         e.preventDefault();
         this.playShot('RIGHT');
-      } else if (['KeyS', 'ArrowDown'].includes(code)) {
+      } else if (isDown) {
         e.preventDefault();
         this.playShot('DOWN');
       }
-    });
+    };
+
+    window.addEventListener('keydown', handleGameKey);
+    document.addEventListener('keydown', handleGameKey);
   }
 
   startMatch(mode = 'BLITZ') {

@@ -32,9 +32,12 @@ class UIManager {
       window.game.startMatch('SUPER_OVER');
     });
 
-    // Spacebar / Enter key to start game from main menu or summary screen
-    window.addEventListener('keydown', (e) => {
-      if (['Space', 'Enter'].includes(e.code)) {
+    // Robust Cross-Browser Spacebar / Enter key detection to start match
+    const handleLauncherKey = (e) => {
+      const isSpace = e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar' || e.keyCode === 32;
+      const isEnter = e.code === 'Enter' || e.key === 'Enter' || e.keyCode === 13;
+
+      if (isSpace || isEnter) {
         if (!this.screens.menu.classList.contains('hidden')) {
           e.preventDefault();
           window.soundEngine.playClick();
@@ -47,7 +50,10 @@ class UIManager {
           window.game.startMatch(window.game.mode || 'BLITZ');
         }
       }
-    });
+    };
+
+    window.addEventListener('keydown', handleLauncherKey);
+    document.addEventListener('keydown', handleLauncherKey);
 
     document.getElementById('btn-shop').addEventListener('click', () => {
       window.soundEngine.playClick();
