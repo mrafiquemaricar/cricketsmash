@@ -28,15 +28,15 @@ class CricketGame {
     this.width = 400;
     this.height = 700;
 
-    // Entities
-    this.ball = null;
-    this.bowler = null;
-    this.batsman = null;
-    this.stumps = null;
+    // Default Non-Null Entities for Immediate Render
+    this.stumps = { x: 200, y: 610, bailsOn: true };
+    this.bowler = { x: 200, y: 120, state: 'IDLE', runTimer: 0 };
+    this.batsman = { x: 200, y: 590, animState: 'READY', swingAngle: 0, swingProgress: 0 };
+    this.ball = { x: 200, y: 130, z: 0, vx: 0, vy: 0, vz: 0, state: 'WAITING' };
     this.particles = [];
     this.callouts = [];
 
-    // Gesture & Input Tracking
+    // Input & Gesture Tracking
     this.touchStart = null;
     this.isSwiping = false;
     this.shotExecuted = false;
@@ -51,12 +51,35 @@ class CricketGame {
   }
 
   resizeCanvas() {
+    if (!this.canvas || !this.canvas.parentElement) return;
     const rect = this.canvas.parentElement.getBoundingClientRect();
-    this.canvas.width = rect.width * window.devicePixelRatio;
-    this.canvas.height = rect.height * window.devicePixelRatio;
-    this.width = rect.width;
-    this.height = rect.height;
-    this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    const w = rect.width > 0 ? rect.width : 400;
+    const h = rect.height > 0 ? rect.height : 700;
+
+    this.canvas.width = w * window.devicePixelRatio;
+    this.canvas.height = h * window.devicePixelRatio;
+    this.width = w;
+    this.height = h;
+
+    this.ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+
+    // Update entity positions relative to canvas size
+    if (this.stumps) {
+      this.stumps.x = this.width / 2;
+      this.stumps.y = this.height - 90;
+    }
+    if (this.bowler) {
+      this.bowler.x = this.width / 2;
+      if (this.bowler.state === 'IDLE') this.bowler.y = 120;
+    }
+    if (this.batsman) {
+      this.batsman.x = this.width / 2;
+      this.batsman.y = this.height - 110;
+    }
+    if (this.ball && this.ball.state === 'WAITING') {
+      this.ball.x = this.width / 2;
+      this.ball.y = 130;
+    }
   }
 
   bindEvents() {
@@ -87,10 +110,10 @@ class CricketGame {
       let shotDirection = 'STRAIGHT';
       if (dist > 20) {
         const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-        if (angle < -135 || angle > 135) shotDirection = 'LEFT'; // Swipe Left -> Pull/Cut
-        else if (angle > -45 && angle < 45) shotDirection = 'RIGHT'; // Swipe Right -> Cover Drive
-        else if (angle < -45 && angle >= -135) shotDirection = 'UP'; // Swipe Up -> Straight Loft
-        else shotDirection = 'DOWN'; // Swipe Down -> Defensive
+        if (angle < -135 || angle > 135) shotDirection = 'LEFT';
+        else if (angle > -45 && angle < 45) shotDirection = 'RIGHT';
+        else if (angle < -45 && angle >= -135) shotDirection = 'UP';
+        else shotDirection = 'DOWN';
       }
 
       this.playShot(shotDirection);
@@ -101,7 +124,7 @@ class CricketGame {
     window.addEventListener('pointerdown', handleStart);
     window.addEventListener('pointerup', handleEnd);
 
-    // Desktop Keyboard Controls (Spacebar, WASD, Arrow Keys, Enter)
+    // Cross-Browser Keyboard Controls
     const handleGameKey = (e) => {
       if (this.state !== 'PLAYING') return;
 
@@ -148,10 +171,12 @@ class CricketGame {
     this.wicketArmorUsed = false;
     this.particles = [];
 
+    this.resizeCanvas();
+
     // Apply Helmet stats
-    const helm = window.shopManager.getHelmet();
+    const helm = window.shopManager ? window.shopManager.getHelmet() : { id: 'blue_helm' };
     if (helm.id === 'carbon_helm') {
-      this.maxWickets = 4; // Extra armor
+      this.maxWickets = 4;
     } else {
       this.maxWickets = 3;
     }
@@ -160,24 +185,21 @@ class CricketGame {
       this.multiplier = 1.2;
     }
 
-    // Bowler setup
     this.bowler = {
       x: this.width / 2,
       y: 120,
-      state: 'RUNNING', // RUNNING, RELEASING, IDLE
+      state: 'RUNNING',
       runTimer: 0
     };
 
-    // Batsman setup
     this.batsman = {
       x: this.width / 2,
       y: this.height - 110,
-      animState: 'READY', // READY, SWINGING, HIT
+      animState: 'READY',
       swingAngle: 0,
       swingProgress: 0
     };
 
-    // Stumps
     this.stumps = {
       x: this.width / 2,
       y: this.height - 90,
@@ -186,7 +208,6 @@ class CricketGame {
 
     this.ball = null;
 
-    // Start Blitz Timer
     if (this.timerInterval) clearInterval(this.timerInterval);
     if (this.mode === 'BLITZ') {
       this.timerInterval = setInterval(() => {
@@ -214,29 +235,30 @@ class CricketGame {
 
     this.shotExecuted = false;
     this.pendingShot = null;
-    this.batsman.animState = 'READY';
-    this.batsman.swingProgress = 0;
+    if (this.batsman) {
+      this.batsman.animState = 'READY';
+      this.batsman.swingProgress = 0;
+    }
 
-    // Bowler start runup
-    this.bowler.state = 'RUNNING';
-    this.bowler.runTimer = 0;
+    if (this.bowler) {
+      this.bowler.state = 'RUNNING';
+      this.bowler.runTimer = 0;
+    }
 
-    // Ball specs
     const types = ['FAST', 'OUTSWING', 'INSWING', 'YORKER', 'BOUNCER', 'SLOW'];
     const selectedType = types[Math.floor(Math.random() * types.length)];
     
-    // Pitch target zone
     let targetX = this.width / 2 + (Math.random() * 40 - 20);
     let targetY = this.height - 240 + (Math.random() * 40 - 20);
     
-    let speed = 7.5 + Math.random() * 2.5; // Fastball pace
+    let speed = 7.5 + Math.random() * 2.5;
     if (selectedType === 'SLOW') speed = 5.0;
     if (selectedType === 'YORKER') targetY = this.height - 150;
 
     this.ball = {
       x: this.width / 2,
       y: 130,
-      z: 20, // Height off ground
+      z: 20,
       vx: 0,
       vy: 0,
       vz: 0,
@@ -244,10 +266,7 @@ class CricketGame {
       targetY: targetY,
       speed: speed,
       type: selectedType,
-      state: 'WAITING', // WAITING, IN_AIR, PITCHED, HIT, OUT, BOUNDARY
-      pitchTime: 0,
-      arrivalTime: 0,
-      contactDelta: 9999
+      state: 'WAITING'
     };
   }
 
@@ -255,25 +274,25 @@ class CricketGame {
     if (!this.ball) return;
     if (this.ball.state === 'HIT' || this.ball.state === 'OUT') return;
 
-    // Always trigger visual swing animation
-    this.batsman.animState = 'SWINGING';
-    this.batsman.swingProgress = 0;
+    if (this.batsman) {
+      this.batsman.animState = 'SWINGING';
+      this.batsman.swingProgress = 0;
+    }
 
-    // Queue shot if bowler hasn't released ball yet
     if (this.ball.state === 'WAITING') {
       this.pendingShot = direction;
       return;
     }
 
-    if (this.shotExecuted) return; // Prevent double swing on single delivery
+    if (this.shotExecuted) return;
 
     this.shotExecuted = true;
     this.ballsFaced++;
 
-    const creaseY = this.batsman.y - 20;
+    const creaseY = (this.batsman ? this.batsman.y : (this.height - 110)) - 20;
     const distToCrease = Math.abs(this.ball.y - creaseY);
 
-    const bat = window.shopManager.getBat();
+    const bat = (window.shopManager && typeof window.shopManager.getBat === 'function') ? window.shopManager.getBat() : { powerBoost: 1.0 };
     const powerMultiplier = bat.powerBoost || 1.0;
 
     let quality = 'MISS';
@@ -284,7 +303,6 @@ class CricketGame {
     else quality = 'MISS';
 
     if (quality !== 'MISS') {
-      // Hit Ball!
       this.ball.state = 'HIT';
       this.consecutiveHits++;
       if (this.consecutiveHits >= 3) this.multiplier = Math.min(3.0, this.multiplier + 0.5);
@@ -320,7 +338,7 @@ class CricketGame {
         this.ball.vx = (Math.random() * 8 - 4) * powerMultiplier;
         this.ball.vy = -6 * powerMultiplier;
         this.ball.vz = 2;
-      } else { // EDGE
+      } else {
         runs = 1;
         this.singles += runs;
         window.soundEngine.playHit('good');
@@ -333,11 +351,10 @@ class CricketGame {
 
       const totalRuns = Math.round(runs * this.multiplier);
       this.score += totalRuns;
-      window.shopManager.addCoins(totalRuns * 2);
+      if (window.shopManager) window.shopManager.addCoins(totalRuns * 2);
 
       setTimeout(() => this.nextDelivery(), 1600);
     } else {
-      // Swung early or late (Miss) - Do not cancel ball, let it fly!
       this.consecutiveHits = 0;
       if (window.uiManager) window.uiManager.showCallout('MISSED', 'SWUNG EARLY', 'single');
     }
@@ -376,7 +393,7 @@ class CricketGame {
     this.state = 'GAME_OVER';
     if (this.timerInterval) clearInterval(this.timerInterval);
 
-    const result = window.leaderboardManager.submitMatchScore(this.score, this.sixes, this.fours);
+    const result = window.leaderboardManager ? window.leaderboardManager.submitMatchScore(this.score, this.sixes, this.fours) : { isNewHigh: false, highScore: this.score };
     if (window.uiManager) {
       window.uiManager.showGameOverScreen({
         runs: this.score,
@@ -392,66 +409,61 @@ class CricketGame {
   update() {
     if (this.state !== 'PLAYING') return;
 
-    // Camera Shake Decay
     if (this.cameraShake > 0) this.cameraShake *= 0.88;
     if (this.cameraShake < 0.2) this.cameraShake = 0;
 
-    // Bowler Runup Animation
-    if (this.bowler.state === 'RUNNING') {
+    if (this.bowler && this.bowler.state === 'RUNNING') {
       this.bowler.runTimer += 0.05;
       this.bowler.y = 120 + Math.sin(this.bowler.runTimer * 10) * 4;
 
       if (this.bowler.runTimer > 1.2) {
         this.bowler.state = 'RELEASING';
-        this.ball.state = 'IN_AIR';
-        
-        // Calculate velocity towards pitch target
-        const dx = this.ball.targetX - this.ball.x;
-        const dy = this.ball.targetY - this.ball.y;
-        const dist = Math.hypot(dx, dy);
-
-        this.ball.vx = (dx / dist) * (this.ball.speed * 0.3);
-        this.ball.vy = this.ball.speed;
+        if (this.ball) {
+          this.ball.state = 'IN_AIR';
+          const dx = this.ball.targetX - this.ball.x;
+          const dy = this.ball.targetY - this.ball.y;
+          const dist = Math.hypot(dx, dy);
+          this.ball.vx = (dx / dist) * (this.ball.speed * 0.3);
+          this.ball.vy = this.ball.speed;
+        }
       }
     }
 
-    // Process queued shot when ball enters striking zone
+    const batsmanY = this.batsman ? this.batsman.y : (this.height - 110);
+    const stumpsX = this.stumps ? this.stumps.x : (this.width / 2);
+
     if (this.pendingShot && this.ball && (this.ball.state === 'IN_AIR' || this.ball.state === 'PITCHED')) {
-      if (this.ball.y >= this.batsman.y - 140) {
+      if (this.ball.y >= batsmanY - 140) {
         const shotDir = this.pendingShot;
         this.pendingShot = null;
         this.playShot(shotDir);
       }
     }
 
-    // Ball Delivery Physics
     if (this.ball && (this.ball.state === 'IN_AIR' || this.ball.state === 'PITCHED')) {
       this.ball.x += this.ball.vx;
       this.ball.y += this.ball.vy;
 
-      // Pitch Bounce
       if (this.ball.y >= this.ball.targetY && this.ball.state === 'IN_AIR') {
         this.ball.state = 'PITCHED';
         this.ball.z = 5;
-        window.soundEngine.playBounce();
+        if (window.soundEngine) window.soundEngine.playBounce();
 
         if (this.ball.type === 'OUTSWING') this.ball.vx += 1.2;
         if (this.ball.type === 'INSWING') this.ball.vx -= 1.2;
       }
 
-      // Ball missed past crease -> Bowled / Dot check
-      if (this.ball.y > this.batsman.y + 40 && this.ball.state !== 'HIT' && this.ball.state !== 'OUT') {
+      if (this.ball.y > batsmanY + 40 && this.ball.state !== 'HIT' && this.ball.state !== 'OUT') {
         this.ball.state = 'OUT';
         if (!this.shotExecuted) {
           this.ballsFaced++;
           this.shotExecuted = true;
         }
 
-        if (Math.abs(this.ball.x - this.stumps.x) < 22) {
-          // Bowled!
-          this.stumps.bailsOn = false;
+        if (Math.abs(this.ball.x - stumpsX) < 22) {
+          if (this.stumps) this.stumps.bailsOn = false;
           this.wickets++;
-          window.soundEngine.playWicket();
+          if (window.soundEngine) window.soundEngine.playWicket();
           if (window.uiManager) window.uiManager.showCallout('BOWLED!', 'WICKET!', 'wicket');
 
           if (this.wickets >= this.maxWickets || (this.mode === 'SUPER_OVER' && this.ballsFaced >= 6)) {
@@ -460,7 +472,6 @@ class CricketGame {
             setTimeout(() => this.nextDelivery(), 1800);
           }
         } else {
-          // Dot Ball
           if (window.uiManager) window.uiManager.showCallout('DOT BALL', 'NO RUN', 'single');
 
           if (this.mode === 'SUPER_OVER' && this.ballsFaced >= 6) {
@@ -473,16 +484,14 @@ class CricketGame {
       }
     }
 
-    // Ball Flight Physics after Hit
     if (this.ball && this.ball.state === 'HIT') {
       this.ball.x += this.ball.vx;
       this.ball.y += this.ball.vy;
       this.ball.z += this.ball.vz;
-      this.ball.vz -= 0.6; // Gravity
+      this.ball.vz -= 0.6;
       if (this.ball.z < 0) this.ball.z = 0;
     }
 
-    // Particle update
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.x += p.vx;
@@ -498,7 +507,6 @@ class CricketGame {
 
     this.ctx.save();
 
-    // Camera shake offset
     if (this.cameraShake > 0) {
       const offsetX = (Math.random() * 2 - 1) * this.cameraShake;
       const offsetY = (Math.random() * 2 - 1) * this.cameraShake;
@@ -514,7 +522,6 @@ class CricketGame {
     this.drawBall();
     this.drawParticles();
 
-    // Visual On-Screen Hit Guidance Prompt
     if (this.state === 'PLAYING' && this.ball && (this.ball.state === 'IN_AIR' || this.ball.state === 'PITCHED')) {
       this.ctx.fillStyle = '#fbbf24';
       this.ctx.font = '900 18px Kanit, sans-serif';
@@ -526,7 +533,7 @@ class CricketGame {
   }
 
   drawStadium() {
-    const stadium = window.shopManager.getStadium();
+    const stadium = (window.shopManager && typeof window.shopManager.getStadium === 'function') ? window.shopManager.getStadium() : { id: 'park' };
     
     if (stadium.id === 'cyber') {
       const grad = this.ctx.createLinearGradient(0, 0, 0, this.height);
@@ -610,9 +617,9 @@ class CricketGame {
   }
 
   drawTargetMarker() {
-    if (!this.ball || this.ball.state === 'HIT' || this.ball.state === 'OUT') return;
+    if (!this.ball || this.ball.state === 'HIT' || this.ball.state === 'OUT' || this.ball.state === 'WAITING') return;
 
-    const helm = window.shopManager.getHelmet();
+    const helm = (window.shopManager && typeof window.shopManager.getHelmet === 'function') ? window.shopManager.getHelmet() : { id: 'blue_helm' };
     const showHUD = helm.id === 'cyber_helm';
 
     this.ctx.strokeStyle = this.ball.type === 'SLOW' ? '#38bdf8' : '#ef4444';
@@ -634,24 +641,24 @@ class CricketGame {
   }
 
   drawStumps() {
-    const sx = this.stumps.x;
-    const sy = this.stumps.y;
+    const sx = (this.stumps && typeof this.stumps.x === 'number') ? this.stumps.x : (this.width / 2);
+    const sy = (this.stumps && typeof this.stumps.y === 'number') ? this.stumps.y : (this.height - 90);
+    const bailsOn = this.stumps ? this.stumps.bailsOn : true;
 
     this.ctx.fillStyle = '#fbbf24';
     for (let i = -1; i <= 1; i++) {
       this.ctx.fillRect(sx + i * 8 - 2, sy - 25, 4, 25);
     }
 
-    if (this.stumps.bailsOn) {
+    if (bailsOn) {
       this.ctx.fillStyle = '#ef4444';
       this.ctx.fillRect(sx - 11, sy - 27, 22, 3);
     }
   }
 
   drawBowler() {
-    if (!this.bowler) return;
-    const bx = this.bowler.x;
-    const by = this.bowler.y;
+    const bx = (this.bowler && typeof this.bowler.x === 'number') ? this.bowler.x : (this.width / 2);
+    const by = (this.bowler && typeof this.bowler.y === 'number') ? this.bowler.y : 120;
 
     this.ctx.fillStyle = '#38bdf8';
     this.ctx.beginPath();
@@ -663,12 +670,12 @@ class CricketGame {
   }
 
   drawBatsman() {
-    if (!this.batsman) return;
-    const bx = this.batsman.x;
-    const by = this.batsman.y;
+    const bx = (this.batsman && typeof this.batsman.x === 'number') ? this.batsman.x : (this.width / 2);
+    const by = (this.batsman && typeof this.batsman.y === 'number') ? this.batsman.y : (this.height - 110);
+    const animState = this.batsman ? this.batsman.animState : 'READY';
 
-    const bat = window.shopManager.getBat();
-    const helm = window.shopManager.getHelmet();
+    const bat = (window.shopManager && typeof window.shopManager.getBat === 'function') ? window.shopManager.getBat() : { id: 'classic', powerBoost: 1.0, trail: 'none' };
+    const helm = (window.shopManager && typeof window.shopManager.getHelmet === 'function') ? window.shopManager.getHelmet() : { id: 'blue_helm' };
 
     this.ctx.save();
     this.ctx.translate(bx, by);
@@ -689,9 +696,10 @@ class CricketGame {
     this.ctx.fillRect(2, 6, 8, 20);
 
     this.ctx.save();
-    if (this.batsman.animState === 'SWINGING') {
-      this.batsman.swingProgress = Math.min(1.0, this.batsman.swingProgress + 0.15);
-      const angle = -Math.PI / 4 + (this.batsman.swingProgress * Math.PI * 0.8);
+    if (animState === 'SWINGING') {
+      if (this.batsman) this.batsman.swingProgress = Math.min(1.0, (this.batsman.swingProgress || 0) + 0.15);
+      const prog = this.batsman ? this.batsman.swingProgress : 0.5;
+      const angle = -Math.PI / 4 + (prog * Math.PI * 0.8);
       this.ctx.rotate(angle);
     } else {
       this.ctx.rotate(-0.3);
@@ -721,23 +729,27 @@ class CricketGame {
   drawBall() {
     if (!this.ball || this.ball.state === 'WAITING') return;
 
-    const scale = 1.0 + (this.ball.z / 40);
+    const bx = typeof this.ball.x === 'number' ? this.ball.x : (this.width / 2);
+    const by = typeof this.ball.y === 'number' ? this.ball.y : 200;
+    const bz = typeof this.ball.z === 'number' ? this.ball.z : 0;
+
+    const scale = 1.0 + (bz / 40);
     const radius = 6 * scale;
 
     this.ctx.save();
     this.ctx.fillStyle = '#dc2626';
     this.ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-    this.ctx.shadowOffsetY = this.ball.z;
+    this.ctx.shadowOffsetY = bz;
     this.ctx.shadowBlur = 6;
 
     this.ctx.beginPath();
-    this.ctx.arc(this.ball.x, this.ball.y - this.ball.z, radius, 0, Math.PI * 2);
+    this.ctx.arc(bx, by - bz, radius, 0, Math.PI * 2);
     this.ctx.fill();
 
     this.ctx.strokeStyle = '#ffffff';
     this.ctx.lineWidth = 1;
     this.ctx.beginPath();
-    this.ctx.arc(this.ball.x, this.ball.y - this.ball.z, radius * 0.7, 0, Math.PI);
+    this.ctx.arc(bx, by - bz, radius * 0.7, 0, Math.PI);
     this.ctx.stroke();
 
     this.ctx.restore();
