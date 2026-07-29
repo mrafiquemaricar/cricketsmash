@@ -80,27 +80,29 @@ html, body {
   display: flex;
   flex-direction: column;
   z-index: 10;
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: auto;
+  transition: opacity 0.2s ease;
 }
 
 .overlay-screen.hidden {
+  display: none !important;
   opacity: 0;
-  pointer-events: none;
-  transform: scale(0.98);
+  pointer-events: none !important;
 }
 
 /* Main Menu Screen Overlay */
 #main-menu-screen {
-  background: transparent;
-  backdrop-filter: none;
-  padding: 20px 16px 28px 16px;
+  background: linear-gradient(180deg, rgba(9, 13, 22, 0.88) 0%, rgba(2, 6, 23, 0.96) 100%);
+  backdrop-filter: blur(10px);
+  padding: 24px 20px;
   justify-content: space-between;
   text-align: center;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
-#main-menu-screen > * {
-  pointer-events: auto;
+button, .btn-primary, .btn-secondary, .btn-icon-label, .btn-close, .shop-tab, .btn-buy-equip {
+  pointer-events: auto !important;
+  cursor: pointer;
 }
 
 .brand-header {

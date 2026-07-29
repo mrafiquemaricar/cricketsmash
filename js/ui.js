@@ -18,34 +18,90 @@ class UIManager {
     this.updateMenuStats();
   }
 
+  bindBtn(id, handler) {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    let lastTime = 0;
+    const action = (e) => {
+      const now = performance.now();
+      if (now - lastTime < 300) return;
+      lastTime = now;
+
+      if (window.soundEngine) window.soundEngine.playClick();
+      handler(e);
+    };
+
+    el.addEventListener('click', action);
+    el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch' || e.pointerType === 'mouse') {
+        action(e);
+      }
+    });
+  }
+
   bindEvents() {
     // Menu Buttons
-    document.getElementById('btn-play-blitz').addEventListener('click', () => {
-      window.soundEngine.playClick();
+    this.bindBtn('btn-play-blitz', () => {
       this.showScreen('hud');
       window.game.startMatch('BLITZ');
     });
 
-    document.getElementById('btn-play-super-over').addEventListener('click', () => {
-      window.soundEngine.playClick();
+    this.bindBtn('btn-play-super-over', () => {
       this.showScreen('hud');
       window.game.startMatch('SUPER_OVER');
     });
 
-    // Robust Cross-Browser Spacebar / Enter key detection to start match
+    this.bindBtn('btn-shop', () => {
+      this.openShop();
+    });
+
+    this.bindBtn('btn-leaderboard', () => {
+      this.openLeaderboard();
+    });
+
+    this.bindBtn('btn-sound-toggle', () => {
+      const muted = window.soundEngine.toggleMute();
+      const icon = document.getElementById('sound-icon');
+      if (icon) icon.textContent = muted ? '🔇' : '🔊';
+    });
+
+    // Close Modals
+    this.bindBtn('btn-close-shop', () => {
+      this.showScreen('menu');
+      this.updateMenuStats();
+    });
+
+    this.bindBtn('btn-close-leaderboard', () => {
+      this.showScreen('menu');
+      this.updateMenuStats();
+    });
+
+    // Summary Actions
+    this.bindBtn('btn-play-again', () => {
+      this.showScreen('hud');
+      window.game.startMatch(window.game.mode || 'BLITZ');
+    });
+
+    this.bindBtn('btn-menu-from-summary', () => {
+      this.showScreen('menu');
+      this.updateMenuStats();
+    });
+
+    // Spacebar / Enter key detection to launch game
     const handleLauncherKey = (e) => {
       const isSpace = e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar' || e.keyCode === 32;
       const isEnter = e.code === 'Enter' || e.key === 'Enter' || e.keyCode === 13;
 
       if (isSpace || isEnter) {
-        if (!this.screens.menu.classList.contains('hidden')) {
+        if (this.screens.menu && !this.screens.menu.classList.contains('hidden')) {
           e.preventDefault();
-          window.soundEngine.playClick();
+          if (window.soundEngine) window.soundEngine.playClick();
           this.showScreen('hud');
           window.game.startMatch('BLITZ');
-        } else if (!this.screens.gameOver.classList.contains('hidden')) {
+        } else if (this.screens.gameOver && !this.screens.gameOver.classList.contains('hidden')) {
           e.preventDefault();
-          window.soundEngine.playClick();
+          if (window.soundEngine) window.soundEngine.playClick();
           this.showScreen('hud');
           window.game.startMatch(window.game.mode || 'BLITZ');
         }
@@ -55,92 +111,64 @@ class UIManager {
     window.addEventListener('keydown', handleLauncherKey);
     document.addEventListener('keydown', handleLauncherKey);
 
-    document.getElementById('btn-shop').addEventListener('click', () => {
-      window.soundEngine.playClick();
-      this.openShop();
-    });
-
-    document.getElementById('btn-leaderboard').addEventListener('click', () => {
-      window.soundEngine.playClick();
-      this.openLeaderboard();
-    });
-
-    document.getElementById('btn-sound-toggle').addEventListener('click', () => {
-      const muted = window.soundEngine.toggleMute();
-      document.getElementById('sound-icon').textContent = muted ? '🔇' : '🔊';
-    });
-
-    // Close Modals
-    document.getElementById('btn-close-shop').addEventListener('click', () => {
-      window.soundEngine.playClick();
-      this.showScreen('menu');
-      this.updateMenuStats();
-    });
-
-    document.getElementById('btn-close-leaderboard').addEventListener('click', () => {
-      window.soundEngine.playClick();
-      this.showScreen('menu');
-      this.updateMenuStats();
-    });
-
     // Shop Tabs
     document.querySelectorAll('.shop-tab').forEach(tab => {
-      tab.addEventListener('click', (e) => {
+      const switchTab = (e) => {
         document.querySelectorAll('.shop-tab').forEach(t => t.classList.remove('active'));
-        e.target.classList.add('active');
-        this.activeShopTab = e.target.dataset.tab;
+        tab.classList.add('active');
+        this.activeShopTab = tab.dataset.tab;
         this.renderShopItems();
-      });
+      };
+      tab.addEventListener('click', switchTab);
+      tab.addEventListener('pointerdown', switchTab);
     });
 
     // Player Name Change
     const nameInput = document.getElementById('player-name-input');
     if (nameInput) {
-      nameInput.value = window.leaderboardManager.playerName;
+      nameInput.value = window.leaderboardManager ? window.leaderboardManager.playerName : 'SmashMaster';
       nameInput.addEventListener('change', (e) => {
-        window.leaderboardManager.setPlayerName(e.target.value);
+        if (window.leaderboardManager) window.leaderboardManager.setPlayerName(e.target.value);
         this.renderLeaderboard();
       });
     }
-
-    // Summary Actions
-    document.getElementById('btn-play-again').addEventListener('click', () => {
-      window.soundEngine.playClick();
-      this.showScreen('hud');
-      window.game.startMatch(window.game.mode || 'BLITZ');
-    });
-
-    document.getElementById('btn-menu-from-summary').addEventListener('click', () => {
-      window.soundEngine.playClick();
-      this.showScreen('menu');
-      this.updateMenuStats();
-    });
   }
 
   showScreen(screenKey) {
     Object.keys(this.screens).forEach(key => {
-      if (key === screenKey) {
-        this.screens[key].classList.remove('hidden');
-      } else {
-        this.screens[key].classList.add('hidden');
+      if (this.screens[key]) {
+        if (key === screenKey) {
+          this.screens[key].classList.remove('hidden');
+        } else {
+          this.screens[key].classList.add('hidden');
+        }
       }
     });
   }
 
   updateMenuStats() {
-    document.getElementById('menu-high-score').textContent = window.leaderboardManager.highScore;
-    document.getElementById('menu-coins').textContent = window.shopManager.coins;
+    const hs = document.getElementById('menu-high-score');
+    if (hs && window.leaderboardManager) hs.textContent = window.leaderboardManager.highScore;
+
+    const coins = document.getElementById('menu-coins');
+    if (coins && window.shopManager) coins.textContent = window.shopManager.coins;
   }
 
   updateHUD() {
     if (!window.game) return;
 
-    document.getElementById('hud-score').textContent = window.game.score;
-    document.getElementById('hud-wickets').textContent = `${window.game.wickets}/${window.game.maxWickets}`;
-    document.getElementById('hud-timer').textContent = `${window.game.timeLeft}s`;
-    document.getElementById('multiplier-badge').textContent = `x${window.game.multiplier.toFixed(1)} POWER`;
+    const s = document.getElementById('hud-score');
+    if (s) s.textContent = window.game.score;
 
-    // Balls tracker update
+    const w = document.getElementById('hud-wickets');
+    if (w) w.textContent = `${window.game.wickets}/${window.game.maxWickets}`;
+
+    const t = document.getElementById('hud-timer');
+    if (t) t.textContent = `${window.game.timeLeft}s`;
+
+    const m = document.getElementById('multiplier-badge');
+    if (m) m.textContent = `x${window.game.multiplier.toFixed(1)} POWER`;
+
     const dots = document.querySelectorAll('.ball-dot');
     dots.forEach((dot, idx) => {
       if (idx < (window.game.ballsFaced % 6)) {
@@ -156,15 +184,16 @@ class UIManager {
     const textEl = document.getElementById('callout-text');
     const subEl = document.getElementById('callout-sub');
 
+    if (!container || !textEl || !subEl) return;
+
     textEl.textContent = text;
     textEl.className = `callout-text ${type}`;
     subEl.textContent = sub;
 
     container.classList.remove('hidden');
 
-    // Trigger re-animation
     container.style.animation = 'none';
-    container.offsetHeight; // trigger reflow
+    container.offsetHeight;
     container.style.animation = 'popup-bounce 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards';
 
     if (this.calloutTimeout) clearTimeout(this.calloutTimeout);
@@ -174,13 +203,15 @@ class UIManager {
   }
 
   openShop() {
-    document.getElementById('shop-coins').textContent = window.shopManager.coins;
+    const sc = document.getElementById('shop-coins');
+    if (sc && window.shopManager) sc.textContent = window.shopManager.coins;
     this.showScreen('shop');
     this.renderShopItems();
   }
 
   renderShopItems() {
     const grid = document.getElementById('shop-items-grid');
+    if (!grid || !window.shopManager) return;
     grid.innerHTML = '';
 
     const category = this.activeShopTab;
@@ -206,16 +237,19 @@ class UIManager {
       `;
 
       const btn = card.querySelector('.btn-buy-equip');
-      if (!isEquipped) {
-        btn.addEventListener('click', () => {
+      if (btn && !isEquipped) {
+        const handleBuy = (e) => {
+          e.stopPropagation();
           const result = window.shopManager.buyItem(category, item.id);
           if (result.success) {
-            document.getElementById('shop-coins').textContent = window.shopManager.coins;
+            const sc = document.getElementById('shop-coins');
+            if (sc) sc.textContent = window.shopManager.coins;
             this.renderShopItems();
           } else {
             alert(result.msg);
           }
-        });
+        };
+        btn.addEventListener('click', handleBuy);
       }
 
       grid.appendChild(card);
@@ -229,6 +263,7 @@ class UIManager {
 
   renderLeaderboard() {
     const list = document.getElementById('leaderboard-list');
+    if (!list || !window.leaderboardManager) return;
     list.innerHTML = '';
 
     const ranks = window.leaderboardManager.getRanks();
@@ -257,22 +292,31 @@ class UIManager {
   }
 
   showGameOverScreen(data) {
-    document.getElementById('summary-runs').textContent = data.runs;
-    document.getElementById('summary-sixes').textContent = data.sixes;
-    document.getElementById('summary-fours').textContent = data.fours;
+    const r = document.getElementById('summary-runs');
+    if (r) r.textContent = data.runs;
+
+    const s = document.getElementById('summary-sixes');
+    if (s) s.textContent = data.sixes;
+
+    const f = document.getElementById('summary-fours');
+    if (f) f.textContent = data.fours;
     
     const sr = data.ballsFaced > 0 ? Math.round((data.runs / data.ballsFaced) * 100) : 0;
-    document.getElementById('summary-sr').textContent = `${sr}%`;
+    const srEl = document.getElementById('summary-sr');
+    if (srEl) srEl.textContent = `${sr}%`;
 
     const coinsWon = data.runs * 2;
-    document.getElementById('summary-coins').textContent = `+${coinsWon} 🪙`;
+    const cEl = document.getElementById('summary-coins');
+    if (cEl) cEl.textContent = `+${coinsWon} 🪙`;
 
     const highBanner = document.getElementById('new-high-score-banner');
-    if (data.isNewHigh) {
-      highBanner.classList.remove('hidden');
-      window.soundEngine.playCrowdCheer(3.0);
-    } else {
-      highBanner.classList.add('hidden');
+    if (highBanner) {
+      if (data.isNewHigh) {
+        highBanner.classList.remove('hidden');
+        if (window.soundEngine) window.soundEngine.playCrowdCheer(3.0);
+      } else {
+        highBanner.classList.add('hidden');
+      }
     }
 
     this.showScreen('gameOver');
