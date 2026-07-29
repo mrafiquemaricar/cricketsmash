@@ -452,21 +452,16 @@ html, body {
 .touch-hint {
   font-size: 0.85rem;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.6);
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px dashed rgba(255, 255, 255, 0.2);
-  padding: 10px 20px;
+  color: #ffffff;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 10px 22px;
   border-radius: 30px;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   gap: 8px;
-  animation: pulse-opacity 2s infinite;
-}
-
-@keyframes pulse-opacity {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 0.9; }
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
 /* Modals: Shop & Leaderboard */

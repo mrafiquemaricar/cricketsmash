@@ -32,6 +32,23 @@ class UIManager {
       window.game.startMatch('SUPER_OVER');
     });
 
+    // Spacebar / Enter key to start game from main menu or summary screen
+    window.addEventListener('keydown', (e) => {
+      if (['Space', 'Enter'].includes(e.code)) {
+        if (!this.screens.menu.classList.contains('hidden')) {
+          e.preventDefault();
+          window.soundEngine.playClick();
+          this.showScreen('hud');
+          window.game.startMatch('BLITZ');
+        } else if (!this.screens.gameOver.classList.contains('hidden')) {
+          e.preventDefault();
+          window.soundEngine.playClick();
+          this.showScreen('hud');
+          window.game.startMatch(window.game.mode || 'BLITZ');
+        }
+      }
+    });
+
     document.getElementById('btn-shop').addEventListener('click', () => {
       window.soundEngine.playClick();
       this.openShop();

@@ -502,6 +502,14 @@ class CricketGame {
     this.drawBall();
     this.drawParticles();
 
+    // Visual On-Screen Hit Guidance Prompt
+    if (this.state === 'PLAYING' && this.ball && (this.ball.state === 'IN_AIR' || this.ball.state === 'PITCHED')) {
+      this.ctx.fillStyle = '#fbbf24';
+      this.ctx.font = '900 18px Kanit, sans-serif';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText('⚡ HIT NOW! (SPACE / CLICK / SWIPE)', this.width / 2, this.height - 180);
+    }
+
     this.ctx.restore();
   }
 
